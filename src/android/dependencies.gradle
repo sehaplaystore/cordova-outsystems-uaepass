@@ -1,0 +1,42 @@
+allprojects {
+    repositories {
+        flatDir {
+            dirs 'libs'
+        }
+    }
+}
+
+android{
+    defaultConfig{
+        //UAE PASS START -- Adding Custom Scheme Variables
+        buildConfigField "String", "URI_SCHEME", "\"HelloCordova\"" // Change to your app name or any custom scheme. Donot use uaepasssample
+        buildConfigField "String", "URI_HOST_SUCCESS", "\"success\""
+        buildConfigField "String", "URI_HOST_FAILURE", "\"failure\""
+
+        manifestPlaceholders = [
+                host_success: "success",
+                host_failure: "failure",
+                scheme      : "HelloCordova" // Change to your app name or any custom scheme. Donot use uaepasssample
+        ]
+        //UAE PASS END -- Adding Custom Scheme Variables
+    }
+}
+
+dependencies {
+
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'src/main/libs')
+
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'com.android.support:design:28.0.0'
+    implementation 'com.android.support:support-v4:28.0.0'
+    implementation 'com.squareup.retrofit2:retrofit:2.4.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.4.0'
+    implementation 'com.squareup.retrofit2:converter-scalars:2.4.0'
+    implementation 'com.google.code.gson:gson:2.8.5'
+    implementation 'com.loopj.android:android-async-http:1.4.9'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+
+    //UAE PASS START -- Enable Kotlin Dependency Start
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.5.30"
+    //UAE PASS END -- Enable Kotlin Dependency End
+}
