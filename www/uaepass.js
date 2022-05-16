@@ -12,12 +12,16 @@ exports.getCode = function (success, error) {
     exec(success, error, 'uaepass', 'getCode', []);
 };
 
-exports.login = function (success, error) {
-    exec(success, error, 'uaepass', 'login', []);
+exports.getAccessToken = function (success, error,code) {
+    exec(success, error, 'uaepass', 'getAccessToken', [code]);
 };
 
-exports.getProfile = function (success, error) {
-    exec(success, error, 'uaepass', 'getProfile', []);
+exports.getProfile = function (success, error,accessToken) {
+    exec(success, error, 'uaepass', 'getProfile', [accessToken]);
+};
+
+exports.signDocument = function (success, error,documentURL) {
+    exec(success, error, 'uaepass', 'signDocument', [documentURL]);
 };
 
 exports.clearData = function (success, error) {

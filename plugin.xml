@@ -10,7 +10,10 @@
 
     <platform name="android">
 
+        <hook type="before_plugin_install" src="hooks/android/ChangeSchema.js" />
         <hook type="after_plugin_install" src="hooks/android/ReplaceAppid.js" />
+        <hook type="after_plugin_install" src="hooks/android/copySignDataJSON.js" />
+        
 
         <config-file parent="/*" target="res/xml/config.xml">
             <feature name="uaepass">
@@ -47,6 +50,7 @@
 		<framework src="src/android/dependencies.gradle" custom="true" type="gradleReference" />
 
         <resource-file src="lib/android/libraryuaepass.aar" target="libs/libraryuaepass.aar"/>
+		<resource-file src="signData.json" target="./signData.json" />
 
         <source-file src="src/android/UAEPass.java" target-dir="src/com/outsystems/uaepass" />
         <source-file src="src/android/UAEPassRequestModels.java" target-dir="src/com/outsystems/uaepass" />
@@ -55,8 +59,10 @@
     <platform name="ios">
 
         <hook type="after_plugin_install" src="hooks/ios/ChangeSchema.js" />
-        <hook type="after_plugin_install" src="hooks/ios/add_swift_support.js" />
-        <hook type="before_plugin_install" src="hooks/ios/changePodMinVersion.js" />
+        <hook type="before_plugin_install" src="hooks/ios/add_swift_support.js" />
+        <hook type="after_plugin_install" src="hooks/ios/replaceResourcePath.js" />
+        <hook type="after_prepare" src="hooks/ios/replaceResourcePath.js" />
+        <hook type="after_plugin_install" src="hooks/ios/copySignDataJSON.js" />
 
         <config-file parent="/*" target="config.xml">
             <feature name="uaepass">
@@ -68,14 +74,39 @@
             <config>
                 <source url="https://cdn.cocoapods.org/"/>
             </config>
-            <pods>
-                <pod name="Alamofire"/>
+            <pods use-frameworks="true">
                 <pod name="NVActivityIndicatorView"/>
-                <pod name="AppDynamicsAgent"/>
             </pods>
         </podspec>
+        
+        <config-file target="*-Info.plist" parent="LSApplicationQueriesSchemes">
+            <array>
+                <string>uaepass</string>
+                <string>uaepassstg</string>
+                <string>uaepassqa</string>
+                <string>uaepassdev</string>
+            </array>
+        </config-file>
+
+        <config-file target="*-Info.plist" parent="CFBundleURLTypes">
+            <array>
+                <dict>
+                    <key>CFBundleTypeRole</key>
+                    <string>Editor</string>
+                    <key>CFBundleURLName</key>
+                    <string>$HelloCordova</string>
+                    <key>CFBundleURLSchemes</key>
+                    <array>
+                        <string>$HelloCordova</string>
+                    </array>
+                </dict>
+            </array>
+        </config-file>
+
+        <preference name="UseSwiftLanguageVersion" default="5" />
 
         <asset src="lib/ios/UAEPassClient" target="UAEPassClient" />
+		<resource-file src="signData.json" target="./signData.json" />
 
         <framework src="UAEPassClient" type="podspec" spec=":path => 'www/UAEPassClient/UAEPassClient.podspec'"/>
         

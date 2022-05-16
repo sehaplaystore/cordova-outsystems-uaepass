@@ -1,199 +1,210 @@
-var child_process = require('child_process'),
-    fs = require('fs'),
-    path = require('path');
+/*
+* This hook adds all the needed config to implement a Cordova plugin with Swift.
+*
+*  - It adds a Bridging header importing Cordova/CDV.h if it's not already
+*    the case. Else it concats all the bridging headers in one single file.
+*
+*    /!\ Please be sure not naming your bridging header file 'Bridging-Header.h'
+*    else it won't be supported.
+*
+*  - It puts the ios deployment target to 7.0 in case your project would have a
+*    lesser one.
+*
+*  - It updates the ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES build setting to YES.
+*
+*  - It updates the SWIFT_VERSION to 5.0.
+*/
 
-module.exports = function(context) {
-    var IOS_DEPLOYMENT_TARGET = '8.0',
-        SWIFT_VERSION = '3.0',
-        COMMENT_KEY = /_comment$/,
-        CORDOVA_VERSION = process.env.CORDOVA_VERSION;
+const fs = require('fs');
+const path = require('path');
+const xcode = require('xcode');
+const childProcess = require('child_process');
+const semver = require('semver');
+const glob = require('glob');
 
-    run();
+module.exports = context => {
+  const projectRoot = context.opts.projectRoot;
 
-    function run() {
-        var cordova_util = context.requireCordovaModule('cordova-lib/src/cordova/util'),
-            ConfigParser = CORDOVA_VERSION >= 6.0
-              ? context.requireCordovaModule('cordova-common').ConfigParser
-              : context.requireCordovaModule('cordova-lib/src/configparser/ConfigParser'),
-            projectRoot = cordova_util.isCordova(),
-            platform_ios,
-            xml = cordova_util.projectConfig(projectRoot),
-            cfg = new ConfigParser(xml),
-            projectName = cfg.name(),
-            iosPlatformPath = path.join(projectRoot, 'platforms', 'ios'),
-            iosProjectFilesPath = path.join(iosPlatformPath, projectName),
-            xcconfigPath = path.join(iosPlatformPath, 'cordova', 'build.xcconfig'),
-            xcconfigContent,
-            projectFile,
-            xcodeProject,
-            bridgingHeaderPath;
+  // This script has to be executed depending on the command line arguments, not
+  // on the hook execution cycle.
+    getPlatformVersionsFromFileSystem(context, projectRoot).then(platformVersions => {
+      const IOS_MIN_DEPLOYMENT_TARGET = '12.0';
+      const platformPath = path.join(projectRoot, 'platforms', 'ios');
+      const config = getConfigParser(context, path.join(projectRoot, 'config.xml'));
 
-        if(CORDOVA_VERSION < 7.0) {
-            platform_ios = CORDOVA_VERSION < 5.0 
-              ? context.requireCordovaModule('cordova-lib/src/plugman/platforms')['ios']
-              : context.requireCordovaModule('cordova-lib/src/plugman/platforms/ios')
+      let bridgingHeaderPath;
+      let bridgingHeaderContent;
+      let projectName;
+      let projectPath;
+      let pluginsPath;
+      let iosPlatformVersion;
+      let pbxprojPath;
+      let xcodeProject;
 
-            projectFile = platform_ios.parseProjectFile(iosPlatformPath);
-        } else {
-            var project_files = context.requireCordovaModule('glob').sync(path.join(iosPlatformPath, '*.xcodeproj', 'project.pbxproj'));
-            if (project_files.length === 0) {
-                throw new Error('Can\'t found xcode project file');
+      const COMMENT_KEY = /_comment$/;
+      let buildConfigs;
+      let buildConfig;
+      let configName;
+
+      platformVersions.forEach((platformVersion) => {
+        if (platformVersion.platform === 'ios') {
+          iosPlatformVersion = platformVersion.version;
+        }
+      });
+
+      if (!iosPlatformVersion) {
+        return;
+      }
+
+      projectName = config.name();
+      projectPath = path.join(platformPath, projectName);
+      pbxprojPath = path.join(platformPath, projectName + '.xcodeproj', 'project.pbxproj');
+      xcodeProject = xcode.project(pbxprojPath);
+      pluginsPath = path.join(projectPath, 'Plugins');
+
+      xcodeProject.parseSync();
+
+      bridgingHeaderPath = getBridgingHeaderPath(projectPath, iosPlatformVersion);
+
+      try {
+        fs.statSync(bridgingHeaderPath);
+      } catch (err) {
+        // If the bridging header doesn't exist, we create it with the minimum
+        // Cordova/CDV.h import.
+        bridgingHeaderContent = ['//',
+          '//  Use this file to import your target\'s public headers that you would like to expose to Swift.',
+          '//',
+          '#import <Cordova/CDV.h>'];
+        fs.writeFileSync(bridgingHeaderPath, bridgingHeaderContent.join('\n'), { encoding: 'utf-8', flag: 'w' });
+        xcodeProject.addHeaderFile('Bridging-Header.h');
+      }
+
+      buildConfigs = xcodeProject.pbxXCBuildConfigurationSection();
+
+      const bridgingHeaderProperty = '"$(PROJECT_DIR)/$(PROJECT_NAME)' + bridgingHeaderPath.split(projectPath)[1] + '"';
+
+      for (configName in buildConfigs) {
+        if (!COMMENT_KEY.test(configName)) {
+          buildConfig = buildConfigs[configName];
+          if (xcodeProject.getBuildProperty('SWIFT_OBJC_BRIDGING_HEADER', buildConfig.name) !== bridgingHeaderProperty) {
+            xcodeProject.updateBuildProperty('SWIFT_OBJC_BRIDGING_HEADER', bridgingHeaderProperty, buildConfig.name);
+            console.log('Update IOS build setting SWIFT_OBJC_BRIDGING_HEADER to:', bridgingHeaderProperty, 'for build configuration', buildConfig.name);
+          }
+        }
+      }
+
+      // Look for any bridging header defined in the plugin
+      glob('**/*Bridging-Header*.h', { cwd: pluginsPath }, (error, files) => {
+        const bridgingHeader = path.basename(bridgingHeaderPath);
+        const headers = files.map((filePath) => path.basename(filePath));
+
+        // if other bridging headers are found, they are imported in the
+        // one already configured in the project.
+        let content = fs.readFileSync(bridgingHeaderPath, 'utf-8');
+
+        if (error) throw new Error(error);
+
+        headers.forEach((header) => {
+          if (header !== bridgingHeader && !~content.indexOf(header)) {
+            if (content.charAt(content.length - 1) !== '\n') {
+              content += '\n';
             }
-
-            var pbxPath = project_files[0];
-            var xcodeproj = context.requireCordovaModule('xcode').project(pbxPath);
-            xcodeproj.parseSync();
-
-            projectFile = {
-                'xcode': xcodeproj,
-                write: function () {
-                    var fs = context.requireCordovaModule('fs');
-
-                    var frameworks_file = path.join(iosPlatformPath, 'frameworks.json');
-                    var frameworks = {};
-                    try {
-                        frameworks = context.requireCordovaModule(frameworks_file);
-                        console.log(JSON.stringify(frameworks));
-                    } catch(e) {}
-
-                    fs.writeFileSync(pbxPath, xcodeproj.writeSync());
-                    fs.writeFileSync(frameworks_file, JSON.stringify(this.frameworks, null, 4));
-                }
-            };
-        }
-        xcodeProject = projectFile.xcode;
-
-        if (fs.existsSync(xcconfigPath)) {
-            xcconfigContent = fs.readFileSync(xcconfigPath, 'utf-8');
-        }
-
-        bridgingHeaderPath = getBridgingHeader(projectName, xcconfigContent, xcodeProject);
-        if(bridgingHeaderPath) {
-            bridgingHeaderPath = path.join(iosPlatformPath, bridgingHeaderPath);
-        } else {
-            bridgingHeaderPath = createBridgingHeader(xcodeProject, projectName, iosProjectFilesPath);
-        }
-
-        getExistingBridgingHeaders(iosProjectFilesPath, function (headers) {
-            importBridgingHeaders(bridgingHeaderPath, headers);
-            var configurations = nonComments(xcodeProject.pbxXCBuildConfigurationSection()),
-                config, buildSettings;
-
-            for (config in configurations) {
-                buildSettings = configurations[config].buildSettings;
-                buildSettings['IPHONEOS_DEPLOYMENT_TARGET'] = IOS_DEPLOYMENT_TARGET;
-                buildSettings['SWIFT_VERSION'] = SWIFT_VERSION;
-                buildSettings['EMBEDDED_CONTENT_CONTAINS_SWIFT'] = "YES";
-                buildSettings['LD_RUNPATH_SEARCH_PATHS'] = '"@executable_path/Frameworks"';
-            }
-            console.log('IOS project now has deployment target set as:[' + IOS_DEPLOYMENT_TARGET + '] ...');
-            console.log('IOS project option EMBEDDED_CONTENT_CONTAINS_SWIFT set as:[YES] ...');
-            console.log('IOS project swift_objc Bridging-Header set to:[' + bridgingHeaderPath + '] ...');
-            console.log('IOS project Runpath Search Paths set to: @executable_path/Frameworks ...');
-
-            projectFile.write();
+            content += '#import "' + header + '"\n';
+            console.log('Importing', header, 'into', bridgingHeaderPath);
+          }
         });
-    }
+        fs.writeFileSync(bridgingHeaderPath, content, 'utf-8');
 
-    function getBridgingHeader(projectName, xcconfigContent, xcodeProject) {
-        var configurations,
-            config,
-            buildSettings,
-            bridgingHeader;
-
-        if (xcconfigContent) {
-            var regex = /^SWIFT_OBJC_BRIDGING_HEADER *=(.*)$/m,
-                match = xcconfigContent.match(regex);
-
-            if (match) {
-                bridgingHeader = match[1];
-                bridgingHeader = bridgingHeader
-                  .replace("$(PROJECT_DIR)/", "")
-                  .replace("$(PROJECT_NAME)", projectName)
-                  .trim();
-
-                return bridgingHeader;
+        for (configName in buildConfigs) {
+          if (!COMMENT_KEY.test(configName)) {
+            buildConfig = buildConfigs[configName];
+            if (parseFloat(xcodeProject.getBuildProperty('IPHONEOS_DEPLOYMENT_TARGET', buildConfig.name)) < parseFloat(IOS_MIN_DEPLOYMENT_TARGET)) {
+              xcodeProject.updateBuildProperty('IPHONEOS_DEPLOYMENT_TARGET', IOS_MIN_DEPLOYMENT_TARGET, buildConfig.name);
+              console.log('Update IOS project deployment target to:', IOS_MIN_DEPLOYMENT_TARGET, 'for build configuration', buildConfig.name);
             }
+
+            if (xcodeProject.getBuildProperty('ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES', buildConfig.name) !== 'YES') {
+              xcodeProject.updateBuildProperty('ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES', 'YES', buildConfig.name);
+              console.log('Update IOS build setting ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES to: YES', 'for build configuration', buildConfig.name);
+            }
+
+            if (xcodeProject.getBuildProperty('LD_RUNPATH_SEARCH_PATHS', buildConfig.name) !== '"@executable_path/Frameworks"') {
+              xcodeProject.updateBuildProperty('LD_RUNPATH_SEARCH_PATHS', '"@executable_path/Frameworks"', buildConfig.name);
+              console.log('Update IOS build setting LD_RUNPATH_SEARCH_PATHS to: @executable_path/Frameworks', 'for build configuration', buildConfig.name);
+            }
+
+            if (typeof xcodeProject.getBuildProperty('SWIFT_VERSION', buildConfig.name) === 'undefined') {
+              if (config.getPreference('UseLegacySwiftLanguageVersion', 'ios')) {
+                xcodeProject.updateBuildProperty('SWIFT_VERSION', '2.3', buildConfig.name);
+                console.log('Use legacy Swift language version', buildConfig.name);
+              } else if (config.getPreference('UseSwiftLanguageVersion', 'ios')) {
+                const swiftVersion = config.getPreference('UseSwiftLanguageVersion', 'ios');
+                xcodeProject.updateBuildProperty('SWIFT_VERSION', swiftVersion, buildConfig.name);
+                console.log('Use Swift language version', swiftVersion);
+              } else {
+                xcodeProject.updateBuildProperty('SWIFT_VERSION', '5.0', buildConfig.name);
+                console.log('Update SWIFT version to 5.0', buildConfig.name);
+              }
+            }
+
+            if (buildConfig.name === 'Debug') {
+              if (xcodeProject.getBuildProperty('SWIFT_OPTIMIZATION_LEVEL', buildConfig.name) !== '"-Onone"') {
+                xcodeProject.updateBuildProperty('SWIFT_OPTIMIZATION_LEVEL', '"-Onone"', buildConfig.name);
+                console.log('Update IOS build setting SWIFT_OPTIMIZATION_LEVEL to: -Onone', 'for build configuration', buildConfig.name);
+              }
+            }
+          }
         }
 
-        configurations = nonComments(xcodeProject.pbxXCBuildConfigurationSection());
+        fs.writeFileSync(pbxprojPath, xcodeProject.writeSync());
+      });
+    });
+};
 
-        for (config in configurations) {
-            buildSettings = configurations[config].buildSettings;
-            bridgingHeader = buildSettings['SWIFT_OBJC_BRIDGING_HEADER'];
-            if (bridgingHeader) {
-                return unquote(bridgingHeader);
-            }
+const getConfigParser = (context, configPath) => {
+  let ConfigParser;
+
+  if (semver.lt(context.opts.cordova.version, '5.4.0')) {
+    ConfigParser = context.requireCordovaModule('cordova-lib/src/ConfigParser/ConfigParser');
+  } else {
+    ConfigParser = require('cordova-common').ConfigParser;
+  }
+
+  return new ConfigParser(configPath);
+};
+
+const getBridgingHeaderPath = (projectPath, iosPlatformVersion) => {
+  let bridgingHeaderPath;
+  if (semver.lt(iosPlatformVersion, '4.0.0')) {
+    bridgingHeaderPath = path.posix.join(projectPath, 'Plugins', 'Bridging-Header.h');
+  } else {
+    bridgingHeaderPath = path.posix.join(projectPath, 'Bridging-Header.h');
+  }
+
+  return bridgingHeaderPath;
+};
+
+const getPlatformVersionsFromFileSystem = (context, projectRoot) => {
+  const cordovaUtil = context.requireCordovaModule('cordova-lib/src/cordova/util');
+  const platformsOnFs = cordovaUtil.listPlatforms(projectRoot);
+  const platformVersions = platformsOnFs.map(platform => {
+    const script = path.join(projectRoot, 'platforms', platform, 'cordova', 'version');
+    return new Promise((resolve, reject) => {
+      childProcess.exec('"' + script + '"', {}, (error, stdout, _) => {
+        if (error) {
+          reject(error);
+          return;
         }
-    }
+        resolve(stdout.trim());
+      });
+    }).then(result => {
+      const version = result.replace(/\r?\n|\r/g, '');
+      return { platform, version };
+    }, (error) => {
+      console.log(error);
+      process.exit(1);
+    });
+  });
 
-    function createBridgingHeader(xcodeProject, projectName, xcodeProjectRootPath) {
-        var newBHPath = path.join(xcodeProjectRootPath, "Plugins", "Bridging-Header.h"),
-            content = ["//",
-                       "//  Use this file to import your target's public headers that you would like to expose to Swift.",
-                       "//",
-                       "#import <Cordova/CDV.h>"]
-
-        //fs.openSync(newBHPath, 'w');
-        console.log('Creating new Bridging-Header.h at path: ', newBHPath);
-        fs.writeFileSync(newBHPath, content.join("\n"), { encoding: 'utf-8', flag: 'w' });
-        xcodeProject.addHeaderFile("Bridging-Header.h");
-        setBridgingHeader(xcodeProject, path.join(projectName, "Plugins", "Bridging-Header.h"));
-        return newBHPath;
-    }
-
-    function setBridgingHeader(xcodeProject, headerPath) {
-        var configurations = nonComments(xcodeProject.pbxXCBuildConfigurationSection()),
-            config, buildSettings, bridgingHeader;
-
-        for (config in configurations) {
-            buildSettings = configurations[config].buildSettings;
-            buildSettings['SWIFT_OBJC_BRIDGING_HEADER'] = '"' + headerPath + '"';
-        }
-    }
-
-    function getExistingBridgingHeaders(xcodeProjectRootPath, callback) {
-        var searchPath = path.join(xcodeProjectRootPath, 'Plugins');
-
-        child_process.exec('find . -name "*Bridging-Header*.h"', { cwd: searchPath }, function (error, stdout, stderr) {
-            var headers = stdout.toString().split('\n').map(function (filePath) {
-                return path.basename(filePath);
-            });
-            callback(headers);
-        });
-    }
-
-    function importBridgingHeaders(mainBridgingHeader, headers) {
-        var content = fs.readFileSync(mainBridgingHeader, 'utf-8'),
-            mainHeaderName = path.basename(mainBridgingHeader);
-
-        headers.forEach(function (header) {
-            if(header !== mainHeaderName && content.indexOf(header) < 0) {
-                if (content.charAt(content.length - 1) != '\n') {
-                    content += "\n";
-                }
-                content += "#import \""+header+"\"\n"
-                console.log('Importing ' + header + ' into main bridging-header at: ' + mainBridgingHeader);
-            }
-        });
-        fs.writeFileSync(mainBridgingHeader, content, 'utf-8');
-    }
-
-    function nonComments(obj) {
-        var keys = Object.keys(obj),
-            newObj = {},
-            i = 0;
-
-        for (i; i < keys.length; i++) {
-            if (!COMMENT_KEY.test(keys[i])) {
-                newObj[keys[i]] = obj[keys[i]];
-            }
-        }
-
-        return newObj;
-    }
-
-    function unquote(str) {
-        if (str) return str.replace(/^"(.*)"$/, "$1");
-    }
-}
+  return Promise.all(platformVersions);
+};

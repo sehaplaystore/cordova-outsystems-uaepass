@@ -1,8 +1,13 @@
 package com.outsystems.uaepass;
 
 import android.Manifest;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -29,7 +34,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import ae.sdg.libraryuaepass.utils.Utils;
 
 import ae.sdg.libraryuaepass.UAEPassController;
 import ae.sdg.libraryuaepass.business.Environment;
@@ -51,9 +59,50 @@ public class UAEPass extends CordovaPlugin {
     private static final int PERMISSION_REQUEST_WRITE_EXTERNAL_STORAGE = 1;
     private UAEPassRequestModels uaePassRequestModels;
 
+    private CallbackContext callbackContext;
+
+    private BroadcastReceiver downloadcompletedBR;
+
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+        super.initialize(cordova, webView);
+        downloadcompletedBR = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                Uri uri = Uri.parse("content://"+cordova.getActivity().getPackageName()+"/Download/" + intent.getStringExtra("Document_title") + ".pdf");
+                File pdfFile = new File(uri.getPath());
+
+                DocumentSigningRequestParams documentSigningParams = loadDocumentSigningJson();
+                cordova.getActivity().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        UAEPassDocumentSigningRequestModel requestModel = uaePassRequestModels.getDocumentRequestModel(pdfFile, documentSigningParams);
+                        UAEPassController.INSTANCE.signDocument(cordova.getActivity(), requestModel, (spId, documentURL, error) -> {
+                            if (error != null) {
+                                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                            } else {
+                                try {
+                                    JSONObject resultJSON = new JSONObject();
+                                    resultJSON.put("pdfName", pdfFile.getName());
+                                    resultJSON.put("url", documentURL);
+                                    resultJSON.put("pdfID", spId);
+                                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, resultJSON.toString()));
+                                }catch (JSONException e){
+                                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,e.getLocalizedMessage()));
+                                }
+                            }
+                        });
+                    }
+                });
+
+            }
+        };
+        cordova.getActivity().registerReceiver(downloadcompletedBR, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+    }
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
+        this.callbackContext = callbackContext;
         switch (action) {
             case "initPlugin":
                 uaePassRequestModels = new UAEPassRequestModels(
@@ -61,73 +110,77 @@ public class UAEPass extends CordovaPlugin {
                         args.getString(1),
                         args.getString(2),
                         args.getString(3));
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK));
                 return true;
             case "getWritePermission":
-                getWritePermission(callbackContext);
+                getWritePermission();
                 return true;
             case "getCode":
-                getCode(callbackContext);
+                getCode();
                 return true;
-            case "login":
-                login(callbackContext);
+            case "getAccessToken":
+                getAccessToken();
                 return true;
             case "getProfile":
-                getProfile(callbackContext);
+                getProfile();
+                return true;
+            case "signDocument":
+                signDocument(args.getString(0));
                 return true;
             case "clearData":
-                clearData(callbackContext);
+                clearData();
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK));
                 return true;
             default:
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,"Action not mapped in the plugin!"));
                 return false;
         }
     }
     /**
      * Ask user for WRITE_EXTERNAL_STORAGE permission to save downloaded document.
-     * @param callbackContext
      */
-    private void getWritePermission(CallbackContext callbackContext) {
+    private void getWritePermission() {
         if (ContextCompat.checkSelfPermission(cordova.getActivity(),
                 Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
 
             if (ActivityCompat.shouldShowRequestPermissionRationale(cordova.getActivity(),
                     Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-                Toast.makeText(cordova.getActivity(), "WRITE_EXTERNAL_STORAGE Permission is required to save the document", Toast.LENGTH_LONG).show();
+                callbackContext.error("WRITE_EXTERNAL_STORAGE Permission is required to save the document");
             } else {
                 ActivityCompat.requestPermissions(cordova.getActivity(),
                         new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                         PERMISSION_REQUEST_WRITE_EXTERNAL_STORAGE);
             }
         } else {
-            signDocument();
+            callbackContext.success();
         }
     }
 
-    @Override
+    /*@Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == PERMISSION_REQUEST_WRITE_EXTERNAL_STORAGE) {// If request is cancelled, the result arrays are empty.
             if (grantResults.length > 0
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                signDocument();
+                callbackContext.success();
             } else {
-                Toast.makeText(cordova.getActivity(), "WRITE_EXTERNAL_STORAGE Permission is required to save the document", Toast.LENGTH_LONG).show();
+                callbackContext.error("WRITE_EXTERNAL_STORAGE Permission is required to save the document");
             }
         }
-    }
+    }*/
 
     /**
      * Login with UAE Pass and get the access Code.
-     * @param callbackContext
      */
-    private void getCode(CallbackContext callbackContext) {
+    private void getCode() {
         cordova.getActivity().runOnUiThread(() -> {
             UAEPassAccessTokenRequestModel requestModel = uaePassRequestModels.getAuthenticationRequestModel(cordova.getActivity());
             UAEPassController.INSTANCE.getAccessCode(cordova.getActivity(), requestModel, (code, error) -> {
                 if (error != null) {
-                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
                 } else {
-                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,code));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,code));
                 }
             });
         });
@@ -135,20 +188,15 @@ public class UAEPass extends CordovaPlugin {
 
     /**
      * Login with UAE Pass and get the access token.
-     * @param callbackContext
      */
-    private void login(CallbackContext callbackContext) {
+    private void getAccessToken() {
         cordova.getActivity().runOnUiThread(() -> {
             UAEPassAccessTokenRequestModel requestModel = uaePassRequestModels.getAuthenticationRequestModel(cordova.getActivity());
             UAEPassController.INSTANCE.getAccessToken(cordova.getActivity(), requestModel, (accessToken, state, error) -> {
                 if (error != null) {
-                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
                 } else {
-                    try {
-                        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,new JSONObject("{\"accessToken\":\""+accessToken+"\",\"state\":\""+state+"\"}")));
-                    } catch (JSONException e) {
-                        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,e.getLocalizedMessage()));
-                    }
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,accessToken));
                 }
             });
         });
@@ -156,59 +204,38 @@ public class UAEPass extends CordovaPlugin {
 
     /**
      * Get User Profile from UAE Pass.
-     * @param callbackContext
      */
-    private void getProfile(CallbackContext callbackContext) {
+    private void getProfile() {
         cordova.getActivity().runOnUiThread(() -> {
             UAEPassProfileRequestModel requestModel = uaePassRequestModels.getProfileRequestModel(cordova.getActivity());
             UAEPassController.INSTANCE.getUserProfile(cordova.getActivity(), requestModel, (profileModel,state, error) -> {
                 if (error != null) {
-                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
                 } else {
                     try {
                         assert profileModel != null;
                         JSONObject profile = new JSONObject();
-                        profile.put("FullNameEN",profileModel.getFullnameEN());
-                        profile.put("FullNameAR",profileModel.getFullnameAR());
                         profile.put("ACR",profileModel.getAcr());
                         profile.put("AMR",profileModel.getAmr());
                         profile.put("DOB",profileModel.getDob());
                         profile.put("CardHolderSignatureImage",profileModel.getCardHolderSignatureImage());
                         profile.put("Domain",profileModel.getDomain());
                         profile.put("Email",profileModel.getEmail());
-                        profile.put("FirstNameAR",profileModel.getFirstnameAR());
                         profile.put("FirstNameEN",profileModel.getFirstnameEN());
                         profile.put("Gender",profileModel.getGender());
-                        profile.put("HomeAddressAreaCode",profileModel.getHomeAddressAreaCode());
-                        profile.put("HomeAddressAreaDescriptionAR",profileModel.getHomeAddressAreaDescriptionAR());
-                        profile.put("HomeAddressAreaDescriptionEN",profileModel.getHomeAddressAreaDescriptionEN());
-                        profile.put("HomeAddressCityCode",profileModel.getHomeAddressCityCode());
-                        profile.put("HomeAddressCityDescriptionAR",profileModel.getHomeAddressCityDescriptionAR());
-                        profile.put("HomeAddressCityDescriptionEN",profileModel.getHomeAddressCityDescriptionEN());
                         profile.put("HomeAddressEmirateCode",profileModel.getHomeAddressEmirateCode());
-                        profile.put("HomeAddressEmirateDescriptionAR",profileModel.getHomeAddressEmirateDescriptionAR());
-                        profile.put("HomeAddressEmirateDescriptionEN",profileModel.getHomeAddressEmirateDescriptionEN());
-                        profile.put("HomeAddressMobilePhoneNumber",profileModel.getHomeAddressMobilePhoneNumber());
-                        profile.put("HomeAddressPOBox",profileModel.getHomeAddressPOBox());
-                        profile.put("HomeAddressTypeCode",profileModel.getHomeAddressTypeCode());
                         profile.put("IDN",profileModel.getIdn());
-                        profile.put("IDType",profileModel.getIdType());
-                        profile.put("LastnameAR",profileModel.getLastnameAR());
                         profile.put("LastnameEN",profileModel.getLastnameEN());
                         profile.put("Mobile",profileModel.getMobile());
-                        profile.put("NationalityAR",profileModel.getNationalityAR());
                         profile.put("NationalityEN",profileModel.getNationalityEN());
-                        profile.put("PassportNumber",profileModel.getPassportNumber());
                         profile.put("Photo",profileModel.getPhoto());
-                        profile.put("Spuuid",profileModel.getSpuuid());
                         profile.put("Sub",profileModel.getSub());
-                        profile.put("TitleAR",profileModel.getTitleAR());
-                        profile.put("TitleEN",profileModel.getTitleEN());
                         profile.put("UserType",profileModel.getUserType());
                         profile.put("UUID",profileModel.getUuid());
-                        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,profile));
+
+                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,profile.toString()));
                     } catch (JSONException e) {
-                        callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,e.getLocalizedMessage()));
+                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,e.getLocalizedMessage()));
                     }
                 }
             });
@@ -217,20 +244,11 @@ public class UAEPass extends CordovaPlugin {
 
     /**
      * Sign Document Using UAE Pass.
+     * @param documentUrl
      */
-    private void signDocument() {
+    private void signDocument(String documentUrl) {
         cordova.getActivity().runOnUiThread(() -> {
-            final File file = loadDocumentFromAssets();
-            DocumentSigningRequestParams documentSigningParams = loadDocumentSigningJson();
-            UAEPassDocumentSigningRequestModel requestModel = uaePassRequestModels.getDocumentRequestModel(file, documentSigningParams);
-            UAEPassController.INSTANCE.signDocument(cordova.getActivity(), requestModel, (spId, documentURL, error) -> {
-                if (error != null) {
-                    Toast.makeText(cordova.getActivity(), "Error while getting access token", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(cordova.getActivity(), "Document Signed Successfully", Toast.LENGTH_SHORT).show();
-                    downloadDocument(file.getName(), documentURL);
-                }
-            });
+            downloadDocument(documentUrl);
         });
     }
 
@@ -242,7 +260,7 @@ public class UAEPass extends CordovaPlugin {
     private DocumentSigningRequestParams loadDocumentSigningJson() {
         String json = null;
         try {
-            InputStream is = cordova.getActivity().getAssets().open("testSignData.json");
+            InputStream is = cordova.getActivity().getAssets().open("signData.json");
             int size = is.available();
             byte[] buffer = new byte[size];
             is.read(buffer);
@@ -260,24 +278,27 @@ public class UAEPass extends CordovaPlugin {
      * Load PDF File from assets for signing.
      *
      * @return File PDF file.
+     * @param documentUrl
      */
-    private File loadDocumentFromAssets() {
-        File f = new File(cordova.getActivity().getFilesDir() + "/dummy.pdf");
+    private void downloadDocument(String documentUrl) {
+        URL url = null;
         try {
-            InputStream is = cordova.getActivity().getAssets().open("dummy.pdf");
-            int size = is.available();
-            byte[] buffer = new byte[size];
-            is.read(buffer);
-            is.close();
-
-            FileOutputStream fos = new FileOutputStream(f);
-            fos.write(buffer);
-            fos.close();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            url = new URL(documentUrl);
+        } catch (MalformedURLException e) {
+            callbackContext.error(e.getLocalizedMessage());
+            return;
         }
 
-        return f;
+        String fileName = "PDF"+ Utils.INSTANCE.generateRandomString(24)+".pdf";
+        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url + ""));
+        request.setTitle(fileName);
+        request.setMimeType("application/pdf");
+        request.allowScanningByMediaScanner();
+        request.setAllowedOverMetered(true);
+        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN);
+        request.setDestinationInExternalFilesDir(cordova.getContext(), android.os.Environment.DIRECTORY_DOCUMENTS, fileName);
+        DownloadManager downloadManager = (DownloadManager) cordova.getActivity().getSystemService(Context.DOWNLOAD_SERVICE);
+        downloadManager.enqueue(request);
     }
 
     /**
@@ -302,9 +323,8 @@ public class UAEPass extends CordovaPlugin {
 
     /**
      * Clear Webview data to open UAE Pass app again.
-     * @param callbackContext
      */
-    private void clearData(CallbackContext callbackContext) {
+    private void clearData() {
         CookieManager.getInstance().removeAllCookies(value -> {
 
         });

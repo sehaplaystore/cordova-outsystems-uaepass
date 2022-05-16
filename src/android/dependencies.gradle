@@ -9,14 +9,14 @@ allprojects {
 android{
     defaultConfig{
         //UAE PASS START -- Adding Custom Scheme Variables
-        buildConfigField "String", "URI_SCHEME", "\"HelloCordova\"" // Change to your app name or any custom scheme. Donot use uaepasssample
-        buildConfigField "String", "URI_HOST_SUCCESS", "\"success\""
-        buildConfigField "String", "URI_HOST_FAILURE", "\"failure\""
+        buildConfigField "String", "URI_SCHEME", "\"$HelloCordova\"" // Change to your app name or any custom scheme. Donot use uaepasssample
+        buildConfigField "String", "URI_HOST_SUCCESS", "\"$success\""
+        buildConfigField "String", "URI_HOST_FAILURE", "\"$failure\""
 
         manifestPlaceholders = [
-                host_success: "success",
-                host_failure: "failure",
-                scheme      : "HelloCordova" // Change to your app name or any custom scheme. Donot use uaepasssample
+                host_success: "$success",
+                host_failure: "$failure",
+                scheme      : "$HelloCordova" // Change to your app name or any custom scheme. Donot use uaepasssample
         ]
         //UAE PASS END -- Adding Custom Scheme Variables
     }
