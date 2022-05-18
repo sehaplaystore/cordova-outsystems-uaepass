@@ -58,7 +58,7 @@ module.exports = function(context) {
         appName+"-Info.plist"
     );
     
-    replaceFile(configs.SCHEMA,/\$HelloCordova/g,pathPlist);
+    replaceFile(configs.IOSSCHEMA,/\$HelloCordova/g,pathPlist);
 
-    console.log("Added App Group!")
+    console.log("Changed Schemas!")
 };

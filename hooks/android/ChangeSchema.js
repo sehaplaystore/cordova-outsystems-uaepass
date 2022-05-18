@@ -21,16 +21,11 @@ module.exports = function(context) {
         "dependencies.gradle"
         );
 
-    console.log(configs)
-    console.log(configs.SCHEMASUCCESS)
-    console.log(configs.SCHEMAFAIL)
-    console.log(configs.SCHEMA)
-
     var content = fs.readFileSync(pathGradle,"utf8");
     if(typeof content === "string"){
         content = content.replace(/\$success/g,configs.SCHEMASUCCESS);
         content = content.replace(/\$failure/g,configs.SCHEMAFAIL);
-        content = content.replace(/\$HelloCordova/g,configs.SCHEMA);
+        content = content.replace(/\$HelloCordova/g,configs.ANDROIDSCHEMA);
     }else{
         console.error(pathGradle + "could not be retrieved!");
     }

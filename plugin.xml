@@ -13,6 +13,9 @@
         <hook type="before_plugin_install" src="hooks/android/ChangeSchema.js" />
         <hook type="after_plugin_install" src="hooks/android/ReplaceAppid.js" />
         <hook type="after_plugin_install" src="hooks/android/copySignDataJSON.js" />
+
+        <hook type="before_prepare" src="hooks/android/manifest-SingleInstance.js" />
+        <hook type="before_compile" src="hooks/android/manifest-SingleInstance.js" />
         
 
         <config-file parent="/*" target="res/xml/config.xml">
@@ -45,6 +48,11 @@
         <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+            <queries>
+                <package android:name="ae.uaepass.mainapp" />
+                <package android:name="ae.uaepass.mainapp.qa" />
+                <package android:name="ae.uaepass.mainapp.stg" />
+            </queries>
         </config-file>
 
 		<framework src="src/android/dependencies.gradle" custom="true" type="gradleReference" />
@@ -110,6 +118,9 @@
 
         <framework src="UAEPassClient" type="podspec" spec=":path => 'www/UAEPassClient/UAEPassClient.podspec'"/>
         
+        <header-file src="src/ios/UAEPass-Bridging-Header.h" />
+        
+        <source-file src="src/ios/Appdelegate+UAEPass.swift" />
         <source-file src="src/ios/UAEPass.swift" />
 
     </platform>
