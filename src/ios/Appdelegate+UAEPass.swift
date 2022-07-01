@@ -26,10 +26,8 @@ extension AppDelegate{
                 webViewController.dismiss(animated: true)
                 return false
             }
-            return true
-        } else {
-            return true;
         }
+        return super.application(application, handleOpen: url)
     }
     
     open override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
@@ -48,10 +46,8 @@ extension AppDelegate{
                 webViewController.dismiss(animated: true)
                 return false
             }
-            return true
-        } else {
-            return true;
         }
+        return super.application(app, open: url, options: options)
     }
     
 }
