@@ -50,15 +50,5 @@ module.exports = function(context) {
     fs.writeFileSync(pathSwift,content);
     console.log("Changed "+path.basename(pathSwift)+"!");
 
-    var pathPlist = path.join(
-        context.opts.projectRoot,
-        "platforms",
-        "ios",
-        appName,
-        appName+"-Info.plist"
-    );
-    
-    replaceFile(configs.IOSSCHEMA,/\$HelloCordova/g,pathPlist);
-
     console.log("Changed Schemas!")
 };
