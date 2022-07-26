@@ -26,20 +26,50 @@ import Alamofire
     public var skipDismiss = false
     public var alreadyCanceled = false
     public override func viewDidLoad() {
+        super.viewDidLoad()
         self.title = "UAE PASS"
-        contentMode.preferredContentMode = .mobile
+        //contentMode.preferredContentMode = .mobile
         self.navigationController?.setNavigationBarHidden(false, animated: false)
     }
     
     let contentMode = WKWebpagePreferences.init()
 
+    @objc func close(_ sender: UIButton) {
+        self.dismiss(animated: true)
+    }
+
     public func reloadwithURL(url: String) {
         webView = UAEPASSRouter.shared.webView
+        webView?.translatesAutoresizingMaskIntoConstraints = false
+        webView?.autoresizesSubviews = true
+        webView?.autoresizingMask = UIView.AutoresizingMask.flexibleWidth
+        webView?.configuration.ignoresViewportScaleLimits = true
+        webView?.contentMode = UIView.ContentMode.scaleToFill
+        webView?.clipsToBounds = true
+        webView?.clearsContextBeforeDrawing = true
+        webView?.sizeToFit()
+
+        webView?.scrollView.contentInsetAdjustmentBehavior = UIScrollView.ContentInsetAdjustmentBehavior.automatic
+
+        let config = UIImage.SymbolConfiguration(pointSize: 25.0, weight: .medium, scale: .medium)
+        let image = UIImage(systemName: "chevron.left", withConfiguration: config)
+        let backButton = UIButton(type: .custom)
+            backButton.frame = CGRect(x: 7, y: 20, width: 70, height: 25)
+            backButton.setImage(image, for: .normal)
+            backButton.setTitle(" Back", for: .normal)
+            backButton.tintColor = UIColor.black
+            backButton.setTitleColor(UIColor.black, for: .normal)
+            backButton.addTarget(self, action: #selector(self.close(_:)), for: .touchUpInside)
+
+        webView?.scrollView.bounces = false
+        webView?.scrollView.alwaysBounceHorizontal = false;
+        webView?.addSubview(backButton)
+
         webView?.navigationDelegate = self
         webView?.frame = self.view.frame
-        if let webView = webView {
-            _ = view.addSubviewStretched(subview: webView)
-        }
+        
+        view.addSubview(webView!)
+
         self.urlString = url
         if let url = URL(string: url) {
             var urlRequest = URLRequest(url: url)
@@ -135,6 +165,15 @@ import Alamofire
             decisionHandler(.allow, contentMode)
         }
     }
+
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+
+           let css = ".authenticationContainer {width: 100%}"
+
+           let js = "var style = document.createElement('style'); style.innerHTML = '\(css)'; document.head.appendChild(style);"
+
+           webView.evaluateJavaScript(js, completionHandler: nil)
+   }
     
     public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         if error._code == -1001 || error._code == -1003 || error._code == -1100 {
