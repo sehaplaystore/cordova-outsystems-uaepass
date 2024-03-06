@@ -86,7 +86,6 @@
             </config>
             <pods use-frameworks="true">
                 <pod name="NVActivityIndicatorView"/>
-                <pod name="Alamofire" spec="5.4.3"/>
             </pods>
         </podspec>
         
@@ -119,7 +118,8 @@
         <asset src="lib/ios/UAEPassClient" target="UAEPassClient" />
 		<resource-file src="signData.json" target="./signData.json" />
 
-        <!--<framework src="UAEPassClient" type="podspec" spec=":path => 'www/UAEPassClient/UAEPassClient.podspec'"/> -->
+        <!-- Removed for MABS 10 compatibility
+        <framework src="UAEPassClient" type="podspec" spec=":path => 'www/UAEPassClient/UAEPassClient.podspec'"/> -->
         
         <header-file src="src/ios/UAEPass-Bridging-Header.h" />
         
