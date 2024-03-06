@@ -16,7 +16,6 @@
 
         <hook type="before_prepare" src="hooks/android/manifest-SingleInstance.js" />
         <hook type="before_compile" src="hooks/android/manifest-SingleInstance.js" />
-        
 
         <config-file parent="/*" target="res/xml/config.xml">
             <feature name="uaepass">
@@ -73,6 +72,7 @@
         <hook type="after_plugin_install" src="hooks/ios/replaceResourcePath.js" />
         <hook type="after_prepare" src="hooks/ios/replaceResourcePath.js" />
         <hook type="after_plugin_install" src="hooks/ios/copySignDataJSON.js" />
+        <hook type="after_prepare" src="hooks/ios/add_local_pod.js" />
 
         <config-file parent="/*" target="config.xml">
             <feature name="uaepass">
@@ -86,6 +86,7 @@
             </config>
             <pods use-frameworks="true">
                 <pod name="NVActivityIndicatorView"/>
+                <pod name="Alamofire" spec="5.4.3"/>
             </pods>
         </podspec>
         
@@ -118,7 +119,7 @@
         <asset src="lib/ios/UAEPassClient" target="UAEPassClient" />
 		<resource-file src="signData.json" target="./signData.json" />
 
-        <framework src="UAEPassClient" type="podspec" spec=":path => 'www/UAEPassClient/UAEPassClient.podspec'"/>
+        <!--<framework src="UAEPassClient" type="podspec" spec=":path => 'www/UAEPassClient/UAEPassClient.podspec'"/> -->
         
         <header-file src="src/ios/UAEPass-Bridging-Header.h" />
         
