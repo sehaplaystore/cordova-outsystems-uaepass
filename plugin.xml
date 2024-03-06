@@ -53,7 +53,7 @@
                 <package android:name="ae.uaepass.mainapp.stg" />
             </queries>
         </config-file>
-
+        <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
 		<framework src="src/android/dependencies.gradle" custom="true" type="gradleReference" />
 
         <resource-file src="lib/android/libraryuaepass.aar" target="libs/libraryuaepass.aar"/>
