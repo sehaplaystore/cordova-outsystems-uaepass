@@ -72,7 +72,7 @@
         <hook type="after_plugin_install" src="hooks/ios/replaceResourcePath.js" />
         <hook type="after_prepare" src="hooks/ios/replaceResourcePath.js" />
         <hook type="after_plugin_install" src="hooks/ios/copySignDataJSON.js" />
-        <hook type="after_prepare" src="hooks/ios/add_local_pod.js" />
+        <hook type="before_plugin_install" src="hooks/ios/add_local_pod.js" />
 
         <config-file parent="/*" target="config.xml">
             <feature name="uaepass">
