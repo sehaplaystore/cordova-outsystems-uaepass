@@ -8,13 +8,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.webkit.CookieManager;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -31,7 +28,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -40,15 +36,13 @@ import java.nio.charset.StandardCharsets;
 import ae.sdg.libraryuaepass.utils.Utils;
 
 import ae.sdg.libraryuaepass.UAEPassController;
-import ae.sdg.libraryuaepass.business.Environment;
 import ae.sdg.libraryuaepass.business.authentication.model.UAEPassAccessTokenRequestModel;
 import ae.sdg.libraryuaepass.business.documentsigning.model.DocumentSigningRequestParams;
 import ae.sdg.libraryuaepass.business.documentsigning.model.UAEPassDocumentDownloadRequestModel;
 import ae.sdg.libraryuaepass.business.documentsigning.model.UAEPassDocumentSigningRequestModel;
 import ae.sdg.libraryuaepass.business.profile.model.UAEPassProfileRequestModel;
-import ae.sdg.libraryuaepass.network.SDGAbstractHttpClient;
 import ae.sdg.libraryuaepass.utils.FileUtils;
-import $appid.BuildConfig;
+import com.outsystems.experts.UAEPassSampleApp.BuildConfig;
 
 
 /**
@@ -97,7 +91,14 @@ public class UAEPass extends CordovaPlugin {
 
             }
         };
-        cordova.getActivity().registerReceiver(downloadcompletedBR, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+
+        // Fix: In Android 12 and above, broadcast receivers that are not registered for exclusive system broadcasts require the RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED flag to be explicitly specified.
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            cordova.getActivity().registerReceiver(downloadcompletedBR, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            cordova.getActivity().registerReceiver(downloadcompletedBR, filter);
+        }
     }
 
     @Override
