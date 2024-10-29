@@ -30,9 +30,11 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+
 import ae.sdg.libraryuaepass.utils.Utils;
 
 import ae.sdg.libraryuaepass.UAEPassController;
@@ -42,7 +44,6 @@ import ae.sdg.libraryuaepass.business.documentsigning.model.UAEPassDocumentDownl
 import ae.sdg.libraryuaepass.business.documentsigning.model.UAEPassDocumentSigningRequestModel;
 import ae.sdg.libraryuaepass.business.profile.model.UAEPassProfileRequestModel;
 import ae.sdg.libraryuaepass.utils.FileUtils;
-import com.outsystems.experts.UAEPassSampleApp.BuildConfig;
 
 
 /**
@@ -63,7 +64,7 @@ public class UAEPass extends CordovaPlugin {
         downloadcompletedBR = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                Uri uri = Uri.parse("content://"+cordova.getActivity().getPackageName()+"/Download/" + intent.getStringExtra("Document_title") + ".pdf");
+                Uri uri = Uri.parse("content://" + cordova.getActivity().getPackageName() + "/Download/" + intent.getStringExtra("Document_title") + ".pdf");
                 File pdfFile = new File(uri.getPath());
 
                 DocumentSigningRequestParams documentSigningParams = loadDocumentSigningJson();
@@ -73,7 +74,7 @@ public class UAEPass extends CordovaPlugin {
                         UAEPassDocumentSigningRequestModel requestModel = uaePassRequestModels.getDocumentRequestModel(pdfFile, documentSigningParams);
                         UAEPassController.INSTANCE.signDocument(cordova.getActivity(), requestModel, (spId, documentURL, error) -> {
                             if (error != null) {
-                                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, error));
                             } else {
                                 try {
                                     JSONObject resultJSON = new JSONObject();
@@ -81,8 +82,8 @@ public class UAEPass extends CordovaPlugin {
                                     resultJSON.put("url", documentURL);
                                     resultJSON.put("pdfID", spId);
                                     callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, resultJSON.toString()));
-                                }catch (JSONException e){
-                                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,e.getLocalizedMessage()));
+                                } catch (JSONException e) {
+                                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage()));
                                 }
                             }
                         });
@@ -133,10 +134,11 @@ public class UAEPass extends CordovaPlugin {
                 callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK));
                 return true;
             default:
-                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,"Action not mapped in the plugin!"));
+                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "Action not mapped in the plugin!"));
                 return false;
         }
     }
+
     /**
      * Ask user for WRITE_EXTERNAL_STORAGE permission to save downloaded document.
      */
@@ -179,9 +181,9 @@ public class UAEPass extends CordovaPlugin {
             UAEPassAccessTokenRequestModel requestModel = uaePassRequestModels.getAuthenticationRequestModel(cordova.getActivity());
             UAEPassController.INSTANCE.getAccessCode(cordova.getActivity(), requestModel, (code, error) -> {
                 if (error != null) {
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, error));
                 } else {
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,code));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, code));
                 }
             });
         });
@@ -195,9 +197,9 @@ public class UAEPass extends CordovaPlugin {
             UAEPassAccessTokenRequestModel requestModel = uaePassRequestModels.getAuthenticationRequestModel(cordova.getActivity());
             UAEPassController.INSTANCE.getAccessToken(cordova.getActivity(), requestModel, (accessToken, state, error) -> {
                 if (error != null) {
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, error));
                 } else {
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,accessToken));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, accessToken));
                 }
             });
         });
@@ -209,34 +211,34 @@ public class UAEPass extends CordovaPlugin {
     private void getProfile() {
         cordova.getActivity().runOnUiThread(() -> {
             UAEPassProfileRequestModel requestModel = uaePassRequestModels.getProfileRequestModel(cordova.getActivity());
-            UAEPassController.INSTANCE.getUserProfile(cordova.getActivity(), requestModel, (profileModel,state, error) -> {
+            UAEPassController.INSTANCE.getUserProfile(cordova.getActivity(), requestModel, (profileModel, state, error) -> {
                 if (error != null) {
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,error));
+                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, error));
                 } else {
                     try {
                         assert profileModel != null;
                         JSONObject profile = new JSONObject();
-                        profile.put("ACR",profileModel.getAcr());
-                        profile.put("AMR",profileModel.getAmr());
-                        profile.put("DOB",profileModel.getDob());
-                        profile.put("CardHolderSignatureImage",profileModel.getCardHolderSignatureImage());
-                        profile.put("Domain",profileModel.getDomain());
-                        profile.put("Email",profileModel.getEmail());
-                        profile.put("FirstNameEN",profileModel.getFirstnameEN());
-                        profile.put("Gender",profileModel.getGender());
-                        profile.put("HomeAddressEmirateCode",profileModel.getHomeAddressEmirateCode());
-                        profile.put("IDN",profileModel.getIdn());
-                        profile.put("LastnameEN",profileModel.getLastnameEN());
-                        profile.put("Mobile",profileModel.getMobile());
-                        profile.put("NationalityEN",profileModel.getNationalityEN());
-                        profile.put("Photo",profileModel.getPhoto());
-                        profile.put("Sub",profileModel.getSub());
-                        profile.put("UserType",profileModel.getUserType());
-                        profile.put("UUID",profileModel.getUuid());
+                        profile.put("ACR", profileModel.getAcr());
+                        profile.put("AMR", profileModel.getAmr());
+                        profile.put("DOB", profileModel.getDob());
+                        profile.put("CardHolderSignatureImage", profileModel.getCardHolderSignatureImage());
+                        profile.put("Domain", profileModel.getDomain());
+                        profile.put("Email", profileModel.getEmail());
+                        profile.put("FirstNameEN", profileModel.getFirstnameEN());
+                        profile.put("Gender", profileModel.getGender());
+                        profile.put("HomeAddressEmirateCode", profileModel.getHomeAddressEmirateCode());
+                        profile.put("IDN", profileModel.getIdn());
+                        profile.put("LastnameEN", profileModel.getLastnameEN());
+                        profile.put("Mobile", profileModel.getMobile());
+                        profile.put("NationalityEN", profileModel.getNationalityEN());
+                        profile.put("Photo", profileModel.getPhoto());
+                        profile.put("Sub", profileModel.getSub());
+                        profile.put("UserType", profileModel.getUserType());
+                        profile.put("UUID", profileModel.getUuid());
 
-                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK,profile.toString()));
+                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, profile.toString()));
                     } catch (JSONException e) {
-                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,e.getLocalizedMessage()));
+                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage()));
                     }
                 }
             });
@@ -245,6 +247,7 @@ public class UAEPass extends CordovaPlugin {
 
     /**
      * Sign Document Using UAE Pass.
+     *
      * @param documentUrl
      */
     private void signDocument(String documentUrl) {
@@ -278,8 +281,8 @@ public class UAEPass extends CordovaPlugin {
     /**
      * Load PDF File from assets for signing.
      *
-     * @return File PDF file.
      * @param documentUrl
+     * @return File PDF file.
      */
     private void downloadDocument(String documentUrl) {
         URL url = null;
@@ -290,7 +293,7 @@ public class UAEPass extends CordovaPlugin {
             return;
         }
 
-        String fileName = "PDF"+ Utils.INSTANCE.generateRandomString(24)+".pdf";
+        String fileName = "PDF" + Utils.INSTANCE.generateRandomString(24) + ".pdf";
         DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url + ""));
         request.setTitle(fileName);
         request.setMimeType("application/pdf");
@@ -335,18 +338,31 @@ public class UAEPass extends CordovaPlugin {
 
     //UAE PASS START -- Callback to handle UAE Pass callback
     @Override
-     public void onNewIntent(Intent intent) {
+    public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleIntent(intent);
     }
 
     private void handleIntent(Intent intent) {
         if (intent != null && intent.getData() != null) {
-            if (BuildConfig.URI_SCHEME.equals(intent.getData().getScheme())) {
+            String uriScheme = (String) getBuildConfigValue(cordova.getContext(), "URI_SCHEME");
+            if (uriScheme != null && uriScheme.equals(intent.getData().getScheme())) {
                 UAEPassController.INSTANCE.resume(intent.getDataString());
             }
         }
     }
+
+    private Object getBuildConfigValue(Context context, String fieldName) {
+        try {
+            Class<?> buildConfigClass = Class.forName(context.getPackageName() + ".BuildConfig");
+            Field field = buildConfigClass.getField(fieldName);
+            return field.get(null);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     //UAE PASS END -- Callback to handle UAE Pass callback
 
 }
