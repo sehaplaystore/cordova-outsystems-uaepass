@@ -25,16 +25,23 @@ android{
 dependencies {
 
     implementation fileTree(include: ['*.jar', '*.aar'], dir: 'src/main/libs')
-
+/* Removed for MABS 11.1
     implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
     implementation 'com.android.support:design:28.0.0'
-    implementation 'com.android.support:support-v4:28.0.0'
+    implementation 'com.android.support:support-v4:28.0.0'*/
+    
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'com.google.android.material:material:1.9.0'
+    
     implementation 'com.squareup.retrofit2:retrofit:2.4.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.4.0'
     implementation 'com.squareup.retrofit2:converter-scalars:2.4.0'
     implementation 'com.google.code.gson:gson:2.8.5'
     implementation 'com.loopj.android:android-async-http:1.4.9'
-    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    
+    
 
     //UAE PASS START -- Enable Kotlin Dependency Start
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.5.30"
